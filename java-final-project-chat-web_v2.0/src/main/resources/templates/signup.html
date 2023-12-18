@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <main>
+        <h1>Sign Up</h1>
+        <form action="/index" th:method="post" th:object="${signupForm}">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username"  th:field="*{username}" required/>
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password"  th:field="*{password}" required/>
+
+            <button type="submit">Sign Up</button>
+        </form>
+        <p>Already have an account? <a href="/login">Log In</a></p>
+        
+        <h3 th:text="${message}" style="color: red;">message</h3>
+    </main>
+</body>
+</html>
