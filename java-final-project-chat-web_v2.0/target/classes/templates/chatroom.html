@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header {
+            background-color: #3498db;
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .chat-messages {
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+        }
+
+        .message {
+            margin-bottom: 10px;
+        }
+
+        .message span {
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .message p {
+            margin: 0;
+        }
+
+        .chat-input {
+            padding: 10px;
+            background-color: #f2f2f2;
+            border-top: 1px solid #ddd;
+        }
+
+        .input-box {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        .sendButton {
+            background-color: #3498db;
+            color: #fff;
+            padding: 8px 12px;
+            border: none;
+            cursor: pointer;
+        }
+        
+        #chatHistoryModal {
+    		display: none;
+		}
+		
+		#chatHistoryContent {
+    		max-height: 300px; 
+    		overflow-y: auto; 
+		}
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+	<div style="display: none;" th:id="loggedInUsername" th:text="${username}"></div>
+	
+    <div class="chat-header">
+    	<h2>Welcome, <span th:text="${username}"></span>!</h2>
+	</div>
+
+    <div class="chat-messages" id="chat-messages">
+        <!-- Chat messages will be displayed here -->
+    </div>
+
+    <div class="chat-input">
+        <input type="text" class="input-box" placeholder="Type your message..." id="messageInput" onkeydown="handleKeyDown(event)">
+        <button class="sendButton" id="sendButton">Send</button>
+        <button class="historyButton" id="historyButton" onclick="requestChatHistory()">Show History</button>
+    </div>
+    
+    <div id="chatHistoryModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeChatHistoryModal()">&times;</span>
+        <h2>Chat History</h2>
+        <div id="chatHistoryContent">
+            <!-- Chat history will be displayed here -->
+        </div>
+    </div>
+</div>
+</div>
+
+<script
+		src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+	<script
+		src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+	'use strict';
+	
+	var stompClient = null;
+	var username = document.getElementById('loggedInUsername').textContent;
+	
+	var colors = [
+	    '#2196F3', '#32c787', '#00BCD4', '#ff5652',
+	    '#ffc107', '#ff85af', '#FF9800', '#39bbb0'
+	];
+
+
+	function connect(event) {
+    	if(username) {
+        	var socket = new SockJS('/chat_zian');
+        	stompClient = Stomp.over(socket);
+
+        	stompClient.connect({}, onConnected, onError);
+    	} 
+	}
+	
+	function onConnected() {
+	    // Subscribe to the Public Topic
+	    stompClient.subscribe('/topic/public', onMessageReceived);
+	    stompClient.subscribe('/topic/public/'+username, onMessageReceived);
+
+	    // Tell your username to the server
+	    stompClient.send("/app/chat.register",
+	        {},
+	        JSON.stringify({sender: username, type: 'JOIN'})
+	    )
+
+	}
+	
+
+	function onError(error) {
+		var messageElement = document.createElement('div');
+		messageElement.textContent = 'Could not connect to WebSocket server. Please restart the server to try again!';
+		messageElement.style.color = 'red';
+		var chatMessages = document.getElementById('chat-messages');
+	    chatMessages.appendChild(messageElement);
+	}
+	
+	function send(event) {
+	    var messageContent = document.getElementById('messageInput');
+	    //messageInput.value = stompClient + 'test tttttttttt';
+
+	    if(messageContent && stompClient) {
+	        var chatMessage = {
+	            sender: username,
+	            content: messageContent.value,
+	            type: 'CHAT'
+	        };
+			
+	        stompClient.send("/app/chat.send", {}, JSON.stringify(chatMessage));
+	        messageInput.value = '';
+	    }
+	}
+	
+	function requestChatHistory() {
+		if(stompClient) {
+			stompClient.send("/app/chat.history",
+			        {},
+			        JSON.stringify({sender: username, type: 'REQUEST_HISTORY'}));
+	    }
+	}
+		
+
+    
+    function closeChatHistoryModal() {
+        var chatHistoryModal = document.getElementById('chatHistoryModal');
+        chatHistoryModal.style.display = 'none';
+    }
+	
+	function onMessageReceived(payload) {
+	    var message = JSON.parse(payload.body);
+	    //messageInput.value = "ttt " + message.type
+	    console.log(message);
+
+	    var messageElement = document.createElement('div');
+	    messageElement.className = 'message';
+	    var chatMessages = document.getElementById('chat-messages');
+		
+		if (Array.isArray(message)) {
+			var chatHistoryModal = document.getElementById('chatHistoryModal');
+			chatHistoryModal.style.display = 'block';
+			var chatHistoryContent = document.getElementById('chatHistoryContent');
+			chatHistoryContent.innerHTML = "";
+			
+			message.forEach(function (record) {
+				var messageElement = createMessageElement(record);
+		        chatHistoryContent.appendChild(messageElement);
+	        });
+	    } else {
+	    	if(message.type === 'JOIN') {
+		    	messageElement.style.color = '#B7B1B0';
+		        messageElement.classList.add('event-message');
+		        message.content = message.sender + ' joined!';
+		    } else if (message.type === 'LEAVE') {
+		    	messageElement.style.color = 'B7B1B0';
+		        messageElement.classList.add('event-message');
+		        message.content = message.sender + ' left!';
+		    } else if (message.content) {
+		        var usernameElement = document.createElement('span');
+		        var usernameText = document.createTextNode(message.sender);
+		        usernameElement.style.color = getAvatarColor(message.sender);
+		        usernameElement.appendChild(usernameText);
+		        messageElement.appendChild(usernameElement);
+		    }
+
+		    var textElement = document.createElement('p');
+		    var messageText = document.createTextNode(message.content);
+		    textElement.appendChild(messageText);
+		    messageElement.appendChild(textElement);
+			
+		   	var chatMessages = document.getElementById('chat-messages');
+		    chatMessages.appendChild(messageElement);
+		    chatMessages.scrollTop = chatMessages.scrollHeight;
+	    }
+	}
+	
+	function getAvatarColor(messageSender) {
+	    var hash = 0;
+	    for (var i = 0; i < messageSender.length; i++) {
+	        hash = 31 * hash + messageSender.charCodeAt(i);
+	    }
+
+	    var index = Math.abs(hash % colors.length);
+	    return colors[index];
+	}
+	
+	function createMessageElement(record) {
+	    var messageElement = document.createElement('div');
+	    messageElement.className = 'message';
+
+	    var usernameElement = document.createElement('span');
+	    usernameElement.style.color = getAvatarColor(record.sender);
+	    usernameElement.appendChild(document.createTextNode(record.sender + ': '));
+
+	    var contentElement = document.createElement('p');
+	    contentElement.appendChild(document.createTextNode(record.content));
+
+	    messageElement.appendChild(usernameElement);
+	    messageElement.appendChild(contentElement);
+
+	    return messageElement;
+	}
+
+    window.onload = function () {
+        connect();
+    };
+    
+    document.getElementById('sendButton').addEventListener('click', function (event) {
+        send(event);
+    });
+    
+    function handleKeyDown(event) {
+        if (event.key === 'Enter') {
+            // If "Enter" key is pressed, simulate a click on the send button
+            document.getElementById('sendButton').click();
+        }
+    }
+</script>
+
+</body>
+</html>
